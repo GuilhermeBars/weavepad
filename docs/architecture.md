@@ -1,11 +1,9 @@
 # Weavepad architecture
 
-Weavepad is an npm-workspaces monorepo requiring Node 20 or newer. Session 1
-provides the web placeholder and tested shared domain package. Session 2 implements
-the sync engine, persistence, optional Redis fan-out and internal versioning API.
-Session 3 implements web authentication, document APIs, and the collaborative UI.
-Session 5 adds production-backed Playwright tests and request/token hardening.
-CI orchestration remains a later session.
+Weavepad is an npm-workspaces monorepo requiring Node 20 or newer. It includes
+the collaborative web app, sync engine, persistence, optional Redis fan-out,
+shared domain logic, production-backed Playwright tests, Docker Compose, and CI.
+See the [README](../README.md) for setup, diagrams, trade-offs, and real app screenshots.
 
 ## Components and boundaries
 
@@ -20,7 +18,7 @@ CI orchestration remains a later session.
   Builds emit ESM and declarations to dist. Type exports refer to source so
   typechecking a clean checkout does not require generated build artifacts.
 
-## Intended data flow
+## Data flow
 
 1. A signed-in user requests a document's short-lived token from the web API.
    Access comes from ownership/membership in Postgres, never from client claims.
@@ -34,7 +32,7 @@ CI orchestration remains a later session.
    Editors can edit, snapshot and restore; owners additionally share and manage.
 4. Rooms load full state plus ordered pending updates from Postgres.
    Persistence batches updates and atomically compacts them. Redis is optional
-   for cross-instance updates/presence; IndexedDB will keep offline browser edits.
+   for cross-instance updates/presence; IndexedDB keeps offline browser edits.
 5. Web snapshot/restore requests go through authenticated internal sync HTTP
    endpoints because the sync process owns live state.
 
@@ -72,7 +70,7 @@ Known upstream limitations include [extended-protocol error recovery](https://gi
 and [concurrent connection scheduling](https://github.com/electric-sql/pglite/issues/1046).
 The smoke test uses simple protocol for intentional SQL failures; normal writes
 and binary round-trips use parameterized pg queries. Validate concurrent database
-workloads against real Postgres in later CI; the local bridge is not equivalent
+workloads against real Postgres in CI; the local bridge is not equivalent
 to Postgres under all failure/concurrency conditions.
 The migration script closes its connection pool even on error. Stop local servers
 with Ctrl+C. `npm run dev` runs web and sync; the database is a separate process.
@@ -86,9 +84,9 @@ Run `npm run format` to apply the repository's Prettier style. CI quality gates 
 `npm run build`. Vitest projects cover shared logic and the HTTP server with one
 worker. See the end-to-end testing section below for the Playwright suite.
 The sync image is available via `docker build -f apps/sync-server/Dockerfile .`.
-Compose and CI configuration are reserved for later sessions.
+Compose and CI configuration are described in [deployment.md](deployment.md).
 
-## Sync runtime and API (session 2)
+## Sync runtime and API
 
 Start with `npm run build -w @weavepad/shared`, then build/start the sync workspace.
 `DATABASE_URL`, `COLLAB_TOKEN_SECRET`, and `INTERNAL_API_SECRET` are required.
@@ -151,7 +149,7 @@ set it to a migrated test database to run that test against real Postgres or
 the local PGlite wire server. Tests use real ws/y-websocket clients, with separate
 fan-out and Redis-adapter tests that do not require a Redis daemon.
 
-## Web runtime and API (session 3)
+## Web runtime and API
 
 The web app loads root `.env` in `next.config.ts`. Set `DATABASE_URL`, `AUTH_SECRET`,
 `AUTH_URL` (the browser-facing origin), `COLLAB_TOKEN_SECRET`, `SYNC_INTERNAL_URL`,
@@ -220,7 +218,7 @@ server-only secrets at runtime. The image starts `apps/web/server.js` as a non-r
 user. Normal local production startup remains `npm run start -w @weavepad/web`.
 Vitest includes web guard/token/last-owner and connection-state tests.
 
-## End-to-end testing (session 5)
+## End-to-end testing
 
 Run `npm run e2e:install -w @weavepad/web` once to install Chromium in the project
 (`PLAYWRIGHT_BROWSERS_PATH=0`), then `npm run e2e`. Playwright starts its own
@@ -249,6 +247,13 @@ One headless Chromium worker runs locally without retries; CI retries twice.
 Failures retain traces and screenshots in apps/web/test-results, with an HTML
 report in apps/web/playwright-report. Teardown requests graceful shutdown and
 waits for sync persistence and the database to close, including on Windows.
+
+`npm run docs:screenshots` uses a separate Playwright configuration with the same
+production harness and forced isolated PGlite. It captures two real demo sessions
+at 1440 × 900, including collaboration, sharing, history, and an offline edit,
+then composes both browser captures into a side-by-side image. Its walkthrough
+is excluded from the normal four-test E2E suite. Local web development and Compose
+also use port 3310; stop them before running either harness.
 
 Security review: application queries use Drizzle; all document APIs check JWT
 sessions and membership, and mutation handlers check role and request Origin.

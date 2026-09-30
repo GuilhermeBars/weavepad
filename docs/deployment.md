@@ -2,7 +2,7 @@
 
 Run `docker compose up --build` from the repository root. Compose waits for
 Postgres and Redis health checks, applies committed migrations once, starts sync,
-then starts web. Open <http://localhost:3000>; browser WebSocket connections use
+then starts web. Open <http://localhost:3310>; browser WebSocket connections use
 `ws://localhost:1234`. Postgres data persists in the `postgres-data` volume.
 
 The Compose defaults are for development. Change `POSTGRES_PASSWORD`,
@@ -23,8 +23,10 @@ Normal local and Playwright builds omit standalone output and use `next start`.
 
 CI runs formatting, lint, type checks, migrated Postgres integration and unit
 tests, production builds, Chromium e2e against Postgres, and Compose validation
-and image builds. Docker images are built only; CI does not start the stack.
-
-Status badge placeholder for the future README:
-
-![CI](https://github.com/GuilhermeBars/weavepad/actions/workflows/ci.yml/badge.svg)
+and image builds. The Docker job starts the stack, probes sync health and the
+web login page, emits logs on failure, and always tears down its containers.
+The workflow configuration describes intended CI checks; consult the
+[workflow runs](https://github.com/GuilhermeBars/weavepad/actions/workflows/ci.yml)
+for their actual status. Compose configuration validation passed locally, but
+the Docker daemon is unavailable in the sandbox used for the documentation
+captures, so container builds and startup were not verified there.
