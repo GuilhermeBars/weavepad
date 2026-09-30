@@ -5,6 +5,13 @@ node_modules
 .git
 .env
 .env.*
+**/.env
+**/.env.*
 .pglite
 .npm-cache
 .codex-logs
+**/playwright-report
+**/test-results
+**/coverage
+**/*.tsbuildinfo
+.github

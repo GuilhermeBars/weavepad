@@ -11,6 +11,7 @@ COPY . .
 ARG NEXT_PUBLIC_SYNC_URL=ws://localhost:1234
 ENV NEXT_PUBLIC_SYNC_URL=$NEXT_PUBLIC_SYNC_URL
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_OUTPUT=standalone
 RUN npm run build -w @weavepad/shared && npm run build -w @weavepad/web
 
 FROM node:20-alpine AS runtime
@@ -21,6 +22,7 @@ ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./
 COPY --from=build --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build --chown=node:node /app/apps/web/public ./apps/web/public
 USER node
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
