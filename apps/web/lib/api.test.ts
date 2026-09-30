@@ -6,6 +6,13 @@ import { HttpError } from './access';
 import { POST as saveSnapshot } from '../app/api/docs/[id]/snapshots/route';
 import { GET as getToken } from '../app/api/docs/[id]/token/route';
 import { verifyCollabToken } from '@weavepad/shared/tokens';
+import * as collection from '../app/api/docs/route';
+import * as document from '../app/api/docs/[id]/route';
+import * as members from '../app/api/docs/[id]/members/route';
+import * as member from '../app/api/docs/[id]/members/[userId]/route';
+import * as snapshots from '../app/api/docs/[id]/snapshots/route';
+import * as diff from '../app/api/docs/[id]/snapshots/[snapshotId]/diff/route';
+import * as restore from '../app/api/docs/[id]/snapshots/[snapshotId]/restore/route';
 
 const { auth, role } = vi.hoisted(() => ({ auth: vi.fn(), role: vi.fn() }));
 vi.mock('../auth', () => ({ auth }));
@@ -14,6 +21,22 @@ vi.mock('./db', () => ({ db: {}, repository: { role } }));
 const id = '00000000-0000-4000-8000-000000000001';
 const user = { id: '00000000-0000-4000-8000-000000000002', name: 'Ada', color: '#123456' };
 const context = { params: Promise.resolve({ id }) };
+const resourceContext = { params: Promise.resolve({ id, userId: id, snapshotId: id }) };
+const routes = [
+  ['list documents', collection.GET],
+  ['create document', collection.POST],
+  ['rename document', document.PATCH],
+  ['delete document', document.DELETE],
+  ['list members', members.GET],
+  ['invite member', members.POST],
+  ['change member', member.PATCH],
+  ['remove member', member.DELETE],
+  ['list snapshots', snapshots.GET],
+  ['save snapshot', snapshots.POST],
+  ['diff snapshot', diff.GET],
+  ['restore snapshot', restore.POST],
+  ['get token', getToken],
+] as const;
 
 beforeEach(() => {
   auth.mockResolvedValue({ user });
@@ -32,6 +55,19 @@ function request(method = 'GET', body?: string, headers: Record<string, string> 
     ...(body === undefined ? {} : { body }),
   });
 }
+
+it.each(routes)('%s rejects unauthenticated callers', async (_name, handler) => {
+  auth.mockResolvedValue(null);
+  const response = await handler(request(), resourceContext);
+  expect(response.status).toBe(401);
+  expect(role).not.toHaveBeenCalled();
+});
+
+it.each(routes.slice(2))('%s rejects nonmembers', async (_name, handler) => {
+  role.mockResolvedValue(null);
+  const response = await handler(request(), resourceContext);
+  expect(response.status).toBe(403);
+});
 
 it('rejects unauthenticated requests before invoking the operation', async () => {
   auth.mockResolvedValue(null);
@@ -55,6 +91,7 @@ it('checks the public origin before reading a mutation body', async () => {
 it.each([
   ['{', 400],
   [' '.repeat(16385), 413],
+  [JSON.stringify({ text: '\u00e9'.repeat(9000) }), 413],
 ])('rejects invalid or oversized JSON', async (body, status) => {
   const response = await handleApi(request('POST', body), async ({ readInput }) =>
     Response.json(await readInput()),

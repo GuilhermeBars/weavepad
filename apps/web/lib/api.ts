@@ -32,10 +32,28 @@ async function executeApi(
         throw new HttpError(413, 'Request too large.');
     }
     const readInput = async () => {
-      const raw = await request.text();
-      if (raw.length > 16384) throw new HttpError(413, 'Request too large.');
+      // Bound actual bytes as they arrive; Content-Length is optional and untrusted.
+      const reader = request.body?.getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      if (reader) {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            size += value.byteLength;
+            if (size > 16384) {
+              await reader.cancel();
+              throw new HttpError(413, 'Request too large.');
+            }
+            chunks.push(value);
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      }
       try {
-        return JSON.parse(raw) as unknown;
+        return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
       } catch {
         throw new HttpError(400, 'Invalid JSON.');
       }

@@ -6,6 +6,9 @@ import * as Y from 'yjs';
 import { WebSocket } from 'ws';
 import { WebsocketProvider } from 'y-websocket';
 import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { eq, count } from 'drizzle-orm';
+import { users, documents, documentUpdates } from '@weavepad/shared/db/schema';
 import { signCollabToken } from '@weavepad/shared/tokens';
 import { snapshotToPlainText, type Role } from '@weavepad/shared';
 import { readConfig } from './config.js';
@@ -181,6 +184,22 @@ it.each(['invalid', 'expired', 'wrong-room'])(
     expect(app.rooms.size).toBe(0);
   },
 );
+it('closes an already connected socket when its token expires', async () => {
+  const { base } = await start();
+  const id = randomUUID();
+  const exp = Math.floor(Date.now() / 1000) + 2;
+  const ws = new WebSocket(
+    `${base.replace('http:', 'ws:')}/${id}?token=${token(id, 'editor', exp)}`,
+  );
+  cleanups.push(async () => {
+    ws.terminate();
+  });
+  await once(ws, 'open');
+  const [code, reason] = await once(ws, 'close');
+  expect(code).toBe(4401);
+  expect(reason.toString()).toBe('Token expired');
+});
+
 it('unloads, compacts, and reloads persisted content', async () => {
   const repo = new MemoryRepository();
   const { client, app } = await start(repo);
@@ -373,22 +392,17 @@ it.runIf(Boolean(process.env.DATABASE_URL))(
     const url = process.env.DATABASE_URL!;
     const repo = new PostgresRepository(url);
     const id = randomUUID();
-    await repo.pool.query('INSERT INTO users(id,email,name,color) VALUES ($1,$2,$3,$4)', [
-      userId,
-      `${userId}@test.invalid`,
-      'Test',
-      '#123456',
-    ]);
-    await repo.pool.query('INSERT INTO documents(id,title,owner_id) VALUES ($1,$2,$3)', [
-      id,
-      'Integration',
-      userId,
-    ]);
+    const db = drizzle(repo.pool);
+    await db
+      .insert(users)
+      .values({ id: userId, email: `${userId}@test.invalid`, name: 'Test', color: '#123456' });
+    await db.insert(documents).values({ id, title: 'Integration', ownerId: userId });
     cleanups.push(async () => {
       const pool = new Pool({ connectionString: url });
       try {
-        await pool.query('DELETE FROM documents WHERE id=$1', [id]);
-        await pool.query('DELETE FROM users WHERE id=$1', [userId]);
+        const cleanupDb = drizzle(pool);
+        await cleanupDb.delete(documents).where(eq(documents.id, id));
+        await cleanupDb.delete(users).where(eq(users.id, userId));
       } finally {
         await pool.end();
       }
@@ -409,15 +423,16 @@ it.runIf(Boolean(process.env.DATABASE_URL))(
     b.disconnect();
     await vi.waitFor(() => expect(app.rooms.size).toBe(0));
     expect(snapshotToPlainText(mergeState(await repo.load(id)))).toBe('Database original');
-    expect(
-      (await repo.pool.query('SELECT count(*) FROM document_updates WHERE document_id=$1', [id]))
-        .rows[0].count,
-    ).toBe('0');
+    const [remaining] = await db
+      .select({ count: count() })
+      .from(documentUpdates)
+      .where(eq(documentUpdates.documentId, id));
+    expect(remaining!.count).toBe(0);
     const c = await client(id);
     expect(plain(c.doc)).toBe('Database original');
     const lease = await app.rooms.acquire(id);
     replace(lease.room.doc, 'Pending when deleted');
-    await repo.pool.query('DELETE FROM documents WHERE id=$1', [id]);
+    await db.delete(documents).where(eq(documents.id, id));
     await expect(lease.room.flush()).resolves.toBeUndefined();
     lease.release();
     await vi.waitFor(() => expect(app.rooms.size).toBe(0));

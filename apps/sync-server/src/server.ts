@@ -185,6 +185,24 @@ export function createSyncServer(options: {
         return;
       }
       const token = claims;
+      // An open transport must not outlive its authorization. The provider
+      // reconnects through the web API, which checks current membership again.
+      const expired = () => {
+        if (token.exp * 1000 > Date.now()) return false;
+        ws.close(CLOSE_CODE.UNAUTHORIZED, 'Token expired');
+        return true;
+      };
+      let expiryTimer: ReturnType<typeof setTimeout>;
+      const scheduleExpiry = () => {
+        expiryTimer = setTimeout(
+          () => {
+            if (!expired()) scheduleExpiry();
+          },
+          Math.min(Math.max(0, token.exp * 1000 - Date.now()), 2147483647),
+        );
+      };
+      scheduleExpiry();
+      ws.once('close', () => clearTimeout(expiryTimer));
       const queued: Uint8Array[] = [];
       let queuedSize = 0;
       const buffer = (data: Buffer, binary: boolean) => {
@@ -201,7 +219,7 @@ export function createSyncServer(options: {
         (async () => {
           const lease = await rooms.acquire(token.docId);
           ws.off('message', buffer);
-          if (ws.readyState !== WebSocket.OPEN || stopping) {
+          if (ws.readyState !== WebSocket.OPEN || stopping || expired()) {
             lease.release();
             return;
           }
@@ -211,6 +229,7 @@ export function createSyncServer(options: {
             lease.release();
           });
           ws.on('message', (data: Buffer, binary) => {
+            if (expired()) return;
             if (binary) lease.room.receive(ws, data);
             else ws.close(1003, 'Binary protocol required');
           });
