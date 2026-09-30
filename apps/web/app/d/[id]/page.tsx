@@ -14,5 +14,12 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
   if (!role) notFound();
   const [doc] = await db.select().from(documents).where(eq(documents.id, id));
   if (!doc) notFound();
-  return <DocumentWorkspace id={id} title={doc.title} role={role} user={{ id: user.id, name: user.name || 'Anonymous', color: user.color }} />;
+  return (
+    <DocumentWorkspace
+      id={id}
+      title={doc.title}
+      role={role}
+      user={{ id: user.id, name: user.name || 'Anonymous', color: user.color }}
+    />
+  );
 }

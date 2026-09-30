@@ -4,7 +4,9 @@ export default {
   session: { strategy: 'jwt' },
   providers: [],
   callbacks: {
-    authorized({ auth }) { return !!auth?.user; },
+    authorized({ auth }) {
+      return !!auth?.user;
+    },
     session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub!;
