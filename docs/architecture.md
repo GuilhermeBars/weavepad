@@ -3,11 +3,12 @@
 Weavepad is an npm-workspaces monorepo requiring Node 20 or newer. Session 1
 provides the web placeholder and tested shared domain package. Session 2 implements
 the sync engine, persistence, optional Redis fan-out and internal versioning API.
-Web authentication, editing UI, and product e2e flows are later sessions.
+Session 3 implements web authentication, document APIs, and the collaborative UI.
+The committed product e2e suite and CI orchestration remain later sessions.
 
 ## Components and boundaries
 
-- `apps/web`: Next.js 15 App Router, React 19 and Tailwind v4. The future web
+- `apps/web`: Next.js 15 App Router, React 19 and Tailwind v4. The web
   server owns Auth.js JWT sessions, access checks, document/member CRUD and token issuance.
 - `apps/sync-server`: HTTP and WebSocket server on `PORT` (default 1234;
   `SYNC_PORT` remains a fallback). It owns active Y.Doc rooms, WebSocket sync,
@@ -147,3 +148,72 @@ to be free. Normal `npm test` skips the Postgres-backed test without DATABASE_UR
 set it to a migrated test database to run that test against real Postgres or
 the local PGlite wire server. Tests use real ws/y-websocket clients, with separate
 fan-out and Redis-adapter tests that do not require a Redis daemon.
+
+## Web runtime and API (session 3)
+
+The web app loads root `.env` in `next.config.ts`. Set `DATABASE_URL`, `AUTH_SECRET`,
+`AUTH_URL` (the browser-facing origin), `COLLAB_TOKEN_SECRET`, `SYNC_INTERNAL_URL`,
+and `INTERNAL_API_SECRET`. The two collaboration secrets must match the sync
+server. `NEXT_PUBLIC_SYNC_URL` is the browser-facing WebSocket address and is
+embedded at build time. `AUTH_GITHUB_ID` and `AUTH_GITHUB_SECRET` together enable
+GitHub; otherwise only Credentials demo login is offered. Behind a trusted reverse
+proxy, configure Auth.js host trust with `AUTH_TRUST_HOST=true`.
+
+Credentials login normalizes email, validates a display name, and upserts a user
+with a randomly selected color on first login. There is deliberately no password
+or email verification: this is a demo identity system, and knowing an email lets
+someone use that account. JWT sessions carry the database user ID and color. The
+middleware protects `/` and `/d/*`; pages and every API handler independently
+check the session. API mutations also check the request Origin against AUTH_URL.
+Drizzle uses the shared schema and a process-global pg Pool. No database connection
+or runtime secret is required merely to build the app.
+
+The document API is implemented by the App Router catch-all route under `/api/docs`:
+
+| Method / path | Access / behavior |
+| --- | --- |
+| GET /api/docs | Signed in; returns `mine` (owner role) and `shared` |
+| POST /api/docs | Signed in; `{title}`, inserts document and owner membership atomically |
+| PATCH /api/docs/:id | Owner; `{title}` |
+| DELETE /api/docs/:id | Owner; cascading deletion |
+| GET /api/docs/:id/token | Any member; 5-minute signed token with current database role |
+| GET /api/docs/:id/members | Owner; membership list |
+| POST /api/docs/:id/members | Owner; `{email,role}`, user must already exist |
+| PATCH /api/docs/:id/members/:userId | Owner; `{role}` |
+| DELETE /api/docs/:id/members/:userId | Owner; removes membership |
+| GET /api/docs/:id/snapshots | Any member; metadata only |
+| POST /api/docs/:id/snapshots | Editor/owner; `{label}`, sync internal API |
+| GET /api/docs/:id/snapshots/:snapshotId/diff | Any member; saved text → current live server text, word additions/removals |
+| POST /api/docs/:id/snapshots/:snapshotId/restore | Editor/owner; sync internal forward restore |
+
+Owner mutations lock the document row, then re-read memberships in the transaction.
+Demotion/removal/upsert cannot remove the final owner. When the owner_id user loses
+ownership, owner_id moves to a remaining owner, keeping the schema invariant intact.
+Membership is the authorization source; no requested role or session role is trusted.
+If a buffered sync append/compaction encounters a deleted document, it discards that
+terminal batch, closes remaining peers with 4403, and unloads without retrying or
+recreating rows. Transient database failures still retain batches for retry.
+As in the sync contract, role changes take effect on the next WebSocket connection;
+they do not forcibly terminate an existing connection. APIs recheck access each time.
+
+The editor uses TipTap 3 Collaboration and CollaborationCaret, with StarterKit's
+separate undo history disabled per the [TipTap collaboration guide](https://tiptap.dev/docs/hocuspocus/guides/collaborative-editing).
+Yjs uses the `default` fragment. IndexedDB caches are scoped by both account and
+document, and cross-tab broadcast sync is disabled to avoid bypassing server role
+checks. The provider's automatic reconnect is suppressed; the app fetches a fresh
+token before every attempt, backs off on outages, and becomes read-only when access
+is denied. Awareness drives names, cursors and the avatar stack. Reconnect refreshes
+the local presence clock and clears metadata for absent remote peers so the initial
+server state can repopulate avatars immediately. Explicit awareness departures
+release their server-side ID claim even if the old transport remains half-open.
+A Connected badge
+means the Yjs handshake completed, not an acknowledgment of durable database writes.
+History compares with current server state; unsent offline edits are not included.
+Offline persistence supports editing in an already loaded app and recovery when the
+app can load again; there is no service worker caching the entire application shell.
+
+The web image uses `apps/web/Dockerfile` and Next's standalone output. Pass
+`--build-arg NEXT_PUBLIC_SYNC_URL=wss://your-sync-host` for deployment, then supply
+server-only secrets at runtime. The image starts `apps/web/server.js` as a non-root
+user. Normal local production startup remains `npm run start -w @weavepad/web`.
+Vitest includes web guard/token/last-owner and connection-state tests.
