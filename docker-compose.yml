@@ -75,14 +75,14 @@ services:
     environment:
       DATABASE_URL: postgresql://weavepad:${POSTGRES_PASSWORD:-dev-postgres-password}@db:5432/weavepad
       AUTH_SECRET: ${AUTH_SECRET:-dev-auth-secret-change-me-before-production}
-      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3310}
       AUTH_TRUST_HOST: 'true'
       COLLAB_TOKEN_SECRET: ${COLLAB_TOKEN_SECRET:-dev-collab-token-secret-change-me}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-api-secret-change-me}
       SYNC_INTERNAL_URL: http://sync:1234
       NEXT_PUBLIC_SYNC_URL: ${NEXT_PUBLIC_SYNC_URL:-ws://localhost:1234}
     ports:
-      - '3000:3000'
+      - '3310:3310'
     depends_on:
       db:
         condition: service_healthy

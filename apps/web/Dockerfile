@@ -17,12 +17,12 @@ RUN npm run build -w @weavepad/shared && npm run build -w @weavepad/web
 FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=3310
 ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./
 COPY --from=build --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build --chown=node:node /app/apps/web/public ./apps/web/public
 USER node
-EXPOSE 3000
+EXPOSE 3310
 CMD ["node", "apps/web/server.js"]
