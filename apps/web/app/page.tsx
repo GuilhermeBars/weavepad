@@ -1,11 +1,8 @@
-export default function Home() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 text-slate-900">
-      <section className="max-w-lg">
-        <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-teal-700">Weavepad</p>
-        <h1 className="text-4xl font-semibold">A space for shared ideas.</h1>
-        <p className="mt-4 text-lg text-slate-600">The collaborative workspace is under construction.</p>
-      </section>
-    </main>
-  );
+import { redirect } from 'next/navigation';
+import { auth, signOut } from '../auth';
+import { Dashboard } from '../components/dashboard';
+export default async function Home() {
+  const session = await auth();
+  if (!session?.user) redirect('/login');
+  return <><header className="app-header"><a href="/" className="brand">▧ <span>weavepad</span></a><div className="row"><span className="muted">{session.user.name}</span><form action={async () => { 'use server'; await signOut({ redirectTo: '/login' }); }}><button>Sign out</button></form></div></header><Dashboard name={session.user.name || 'there'} /></>;
 }
