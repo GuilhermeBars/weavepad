@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import * as Y from 'yjs';
 
+/** A deleted document is terminal, unlike a transient database outage. */
+export class DocumentDeletedError extends Error {
+  constructor() { super('Document not found'); this.name = 'DocumentDeletedError'; }
+}
+
 export interface Snapshot {
   id: string; documentId: string; label: string; createdBy: string; createdAt: Date; state: Uint8Array;
 }

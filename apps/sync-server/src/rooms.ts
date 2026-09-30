@@ -7,7 +7,7 @@ import { WebSocket } from 'ws';
 import { canEdit, type Role, MESSAGE_TYPE, SYNC_MESSAGE_TYPE } from '@weavepad/shared';
 import type { Logger } from 'pino';
 import type { Config } from './config.js';
-import type { Repository } from './repository.js';
+import { DocumentDeletedError, type Repository } from './repository.js';
 import type { Fanout, FanoutEvent } from './redis.js';
 
 const LOAD = Symbol('load');
@@ -22,6 +22,7 @@ export class Room {
   readonly awareness = new awareness.Awareness(this.doc);
   private readonly peers = new Map<WebSocket, Peer>();
   private pending: Uint8Array[] = [];
+  private deleted = false;
   private persisted = 0;
   private writes: Promise<void> = Promise.resolve();
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -29,7 +30,7 @@ export class Room {
   constructor(readonly id: string, private repo: Repository, private config: Config, private logger: Logger, private bus?: Fanout) {
     this.awareness.setLocalState(null);
     this.doc.on('update', (update: Uint8Array, origin: unknown) => {
-      if (origin === LOAD) return;
+      if (origin === LOAD || this.deleted) return;
       this.pending.push(update);
       this.broadcast(message(MESSAGE_TYPE.SYNC, (encoder) => sync.writeUpdate(encoder, update)));
       if (origin !== REMOTE) this.publish({ kind: 'update', data: update });
@@ -54,6 +55,7 @@ export class Room {
     }
   }
   private receiveRemote(event: FanoutEvent) {
+    if (this.deleted) return;
     if (event.kind === 'update') Y.applyUpdate(this.doc, event.data, REMOTE);
     else if (event.kind === 'awareness') awareness.applyAwarenessUpdate(this.awareness, event.data, REMOTE);
     else {
@@ -74,6 +76,7 @@ export class Room {
   }
   private broadcast(bytes: Uint8Array) { for (const ws of this.peers.keys()) this.send(ws, bytes); }
   connect(ws: WebSocket, role: Role) {
+    if (this.deleted) { ws.close(4403, 'Document deleted'); return; }
     this.peers.set(ws, { role, ids: new Set() });
     this.send(ws, message(MESSAGE_TYPE.SYNC, (encoder) => sync.writeSyncStep1(encoder, this.doc)));
     this.sendAwareness(ws);
@@ -87,6 +90,7 @@ export class Room {
     this.send(ws, message(MESSAGE_TYPE.AWARENESS, (encoder) => encoding.writeVarUint8Array(encoder, awareness.encodeAwarenessUpdate(this.awareness, [...this.awareness.getStates().keys()]))));
   }
   receive(ws: WebSocket, bytes: Uint8Array) {
+    if (this.deleted) return;
     const peer = this.peers.get(ws);
     if (!peer) return;
     try {
@@ -121,12 +125,19 @@ export class Room {
           encoding.writeVarUint(filtered, entry.id); encoding.writeVarUint(filtered, entry.clock); encoding.writeVarString(filtered, entry.state);
         }
         awareness.applyAwarenessUpdate(this.awareness, encoding.toUint8Array(filtered), ws);
+        // A client can announce departure before its old transport closes (offline
+        // or a half-open socket). Release those IDs so a fresh transport can claim
+        // them; the old socket must not remove the new connection's presence later.
+        for (const entry of entries) {
+          if (entry.state === 'null' && !this.awareness.getStates().has(entry.id)) peer.ids.delete(entry.id);
+        }
       } else if (type === MESSAGE_TYPE.QUERY_AWARENESS) this.sendAwareness(ws);
       else throw new Error('Unknown message');
     } catch { ws.close(1003, 'Malformed protocol message'); }
   }
   flush(compact = false): Promise<void> {
     const next = this.writes.catch(() => {}).then(async () => {
+      if (this.deleted) return;
       const batch = this.pending.splice(0);
       if (batch.length) {
         try { await this.repo.append(this.id, batch); this.persisted += batch.length; }
@@ -135,6 +146,14 @@ export class Room {
       if (compact || this.persisted >= this.config.COMPACT_AFTER_UPDATES) {
         await this.repo.compact(this.id); this.persisted = 0;
       }
+    }).catch((err: unknown) => {
+      if (!(err instanceof DocumentDeletedError)) throw err;
+      // The web app deleted the parent row; no retry can persist these edits.
+      this.deleted = true;
+      this.pending = [];
+      clearInterval(this.timer);
+      for (const ws of this.peers.keys()) ws.close(4403, 'Document deleted');
+      this.logger.info({ docId: this.id }, 'Discarded state for deleted document');
     });
     this.writes = next;
     return next;

@@ -9,7 +9,7 @@ import { Pool } from 'pg';
 import { signCollabToken } from '@weavepad/shared/tokens';
 import { snapshotToPlainText, type Role } from '@weavepad/shared';
 import { readConfig } from './config.js';
-import { MemoryRepository, mergeState, type Repository } from './repository.js';
+import { DocumentDeletedError, MemoryRepository, mergeState, type Repository } from './repository.js';
 import { PostgresRepository } from './postgres.js';
 import { createSyncServer } from './server.js';
 import type { Fanout, FanoutEvent } from './redis.js';
@@ -58,6 +58,21 @@ it('converges two real y-websocket clients and cleans awareness on disconnect', 
   a.connect(); await vi.waitFor(() => expect(a.synced).toBe(true));
   a.awareness.setLocalStateField('user', { name: 'Reconnected' });
   await vi.waitFor(() => expect(b.awareness.getStates().get(a.doc.clientID)?.user).toEqual({ name: 'Reconnected' }));
+});
+it('lets a new transport reclaim presence after departure before the old socket closes', async () => {
+  const { client } = await start(); const id = randomUUID();
+  const old = await client(id); const observer = await client(id);
+  old.awareness.setLocalStateField('user', { name: 'Before' });
+  await vi.waitFor(() => expect(observer.awareness.getStates().get(old.doc.clientID)?.user).toEqual({ name: 'Before' }));
+  old.awareness.setLocalState(null);
+  await vi.waitFor(() => expect(observer.awareness.getStates().has(old.doc.clientID)).toBe(false));
+  const replacementDoc = new Y.Doc(); replacementDoc.clientID = old.doc.clientID;
+  const replacement = await client(id, 'editor', replacementDoc);
+  for (let i = 0; i < 10; i++) replacement.awareness.setLocalStateField('user', { name: 'Returned' });
+  await vi.waitFor(() => expect(observer.awareness.getStates().get(old.doc.clientID)?.user).toEqual({ name: 'Returned' }));
+  old.disconnect();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(observer.awareness.getStates().get(replacement.doc.clientID)?.user).toEqual({ name: 'Returned' });
 });
 it('serves viewer sync step1 but rejects initial step2 and later edits without persistence', async () => {
   const repo = new MemoryRepository(); const { client, app } = await start(repo); const id = randomUUID();
@@ -123,6 +138,22 @@ it('reports health and database failures', async () => {
   expect(await (await fetch(base + '/health')).json()).toEqual({ status: 'ok', db: 'ok', redis: { enabled: false }, activeRooms: 0 });
   vi.spyOn(repo, 'health').mockRejectedValueOnce(new Error('Down')); expect((await fetch(base + '/health')).status).toBe(503);
 });
+it('discards terminal deleted-document writes and closes peers without retrying', async () => {
+  const repo = new MemoryRepository();
+  const { app, client } = await start(repo, { FLUSH_INTERVAL_MS: '60000' });
+  const id = randomUUID(); const peer = await client(id);
+  const lease = await app.rooms.acquire(id);
+  replace(lease.room.doc, 'Unflushed when deleted');
+  const append = vi.spyOn(repo, 'append').mockRejectedValue(new DocumentDeletedError());
+  const compact = vi.spyOn(repo, 'compact');
+  await expect(lease.room.flush()).resolves.toBeUndefined();
+  await expect(lease.room.flush(true)).resolves.toBeUndefined();
+  await vi.waitFor(() => expect(peer.wsconnected).toBe(false));
+  expect(append).toHaveBeenCalledTimes(1);
+  expect(compact).not.toHaveBeenCalled();
+  lease.release();
+  await vi.waitFor(() => expect(app.rooms.size).toBe(0));
+});
 it('validates config and defaults PORT to 1234', () => {
   const env = { DATABASE_URL: 'postgresql://localhost/db', COLLAB_TOKEN_SECRET: secret, INTERNAL_API_SECRET: 'internal' };
   expect(readConfig(env).PORT).toBe(1234); expect(readConfig({ ...env, PORT: '4567', SYNC_PORT: '1234' }).PORT).toBe(4567);
@@ -187,4 +218,11 @@ it.runIf(Boolean(process.env.DATABASE_URL))('Postgres: real server sync, snapsho
   expect(snapshotToPlainText(mergeState(await repo.load(id)))).toBe('Database original');
   expect((await repo.pool.query('SELECT count(*) FROM document_updates WHERE document_id=$1', [id])).rows[0].count).toBe('0');
   const c = await client(id); expect(plain(c.doc)).toBe('Database original');
+  const lease = await app.rooms.acquire(id);
+  replace(lease.room.doc, 'Pending when deleted');
+  await repo.pool.query('DELETE FROM documents WHERE id=$1', [id]);
+  await expect(lease.room.flush()).resolves.toBeUndefined();
+  lease.release();
+  await vi.waitFor(() => expect(app.rooms.size).toBe(0));
+  await expect(repo.load(id)).rejects.toBeInstanceOf(DocumentDeletedError);
 }, 20000);

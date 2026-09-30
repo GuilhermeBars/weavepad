@@ -2,7 +2,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { documents, documentState, documentUpdates, snapshots } from '@weavepad/shared/db/schema';
-import { mergeState, type Repository } from './repository.js';
+import { DocumentDeletedError, mergeState, type Repository } from './repository.js';
 
 export class PostgresRepository implements Repository {
   readonly pool: Pool;
@@ -15,7 +15,7 @@ export class PostgresRepository implements Repository {
   private async locked<T>(id: string, operation: (tx: Parameters<Parameters<typeof this.db.transaction>[0]>[0]) => Promise<T>) {
     return this.db.transaction(async (tx) => {
       const rows = await tx.select({ id: documents.id }).from(documents).where(eq(documents.id, id)).for('update');
-      if (!rows.length) throw new Error('Document not found');
+      if (!rows.length) throw new DocumentDeletedError();
       return operation(tx);
     });
   }
