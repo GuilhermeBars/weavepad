@@ -35,8 +35,8 @@ jobs:
           --health-cmd "pg_isready -U postgres -d weavepad"
           --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: npm
@@ -72,8 +72,8 @@ jobs:
           --health-cmd "pg_isready -U postgres -d weavepad"
           --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: npm
@@ -95,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: docker compose config
       - run: docker compose build
       - name: Start stack
@@ -103,7 +103,7 @@ jobs:
       - name: Smoke test sync and web
         run: |
           curl --fail --retry 10 --retry-delay 3 --retry-all-errors http://localhost:1234/health
-          curl --fail --retry 10 --retry-delay 3 --retry-all-errors -o /dev/null http://localhost:3000/login
+          curl --fail --retry 10 --retry-delay 3 --retry-all-errors -o /dev/null http://localhost:3310/login
       - name: Show logs on failure
         if: failure()
         run: docker compose logs --no-color
