@@ -4,7 +4,8 @@ Weavepad is an npm-workspaces monorepo requiring Node 20 or newer. Session 1
 provides the web placeholder and tested shared domain package. Session 2 implements
 the sync engine, persistence, optional Redis fan-out and internal versioning API.
 Session 3 implements web authentication, document APIs, and the collaborative UI.
-The committed product e2e suite and CI orchestration remain later sessions.
+Session 5 adds production-backed Playwright tests and request/token hardening.
+CI orchestration remains a later session.
 
 ## Components and boundaries
 
@@ -83,8 +84,7 @@ constraint and persistence smoke test (requires port 5432 to be free).
 Run `npm run format` to apply the repository's Prettier style. CI quality gates are
 `npm run format:check`, `npm run typecheck`, `npm run lint`, `npm test`, and
 `npm run build`. Vitest projects cover shared logic and the HTTP server with one
-worker. `npm run e2e` is wired to Playwright with local browser storage, but the
-product suite and server orchestration are intentionally not implemented yet.
+worker. See the end-to-end testing section below for the Playwright suite.
 The sync image is available via `docker build -f apps/sync-server/Dockerfile .`.
 Compose and CI configuration are reserved for later sessions.
 
@@ -99,8 +99,9 @@ PORT. For a standalone sync deployment, PORT takes precedence over SYNC_PORT.
 
 The standard provider URL is `ws://host:1234/<docId>?token=...`. Invalid or expired
 tokens close with 4401; document mismatch or denied read access closes with 4403.
-Tokens grant access for the connection lifetime; subsequent token expiry does not
-disconnect an established session. Viewer step2 and update frames are discarded.
+Active sockets close at token expiry (4401). The browser fetches a new token and
+reconnects, rechecking membership at most five minutes after a role change.
+Role changes and revocation are not instantaneous for existing sockets. Viewer step2 and update frames are discarded.
 Malformed protocol frames close with 1003; payloads default to a 1 MiB limit.
 Ping/pong detects dead peers. Slow consumers are disconnected when queued output
 exceeds four times the payload limit. Presence is transient and removed on close.
@@ -169,7 +170,7 @@ check the session. API mutations also check the request Origin against AUTH_URL.
 Drizzle uses the shared schema and a process-global pg Pool. No database connection
 or runtime secret is required merely to build the app.
 
-The document API is implemented by the App Router catch-all route under `/api/docs`:
+The document API uses per-resource App Router handlers under `/api/docs`:
 
 | Method / path                                    | Access / behavior                                                          |
 | ------------------------------------------------ | -------------------------------------------------------------------------- |
@@ -218,3 +219,44 @@ The web image uses `apps/web/Dockerfile` and Next's standalone output. Pass
 server-only secrets at runtime. The image starts `apps/web/server.js` as a non-root
 user. Normal local production startup remains `npm run start -w @weavepad/web`.
 Vitest includes web guard/token/last-owner and connection-state tests.
+
+## End-to-end testing (session 5)
+
+Run `npm run e2e:install -w @weavepad/web` once to install Chromium in the project
+(`PLAYWRIGHT_BROWSERS_PATH=0`), then `npm run e2e`. Playwright starts its own
+production stack: migrations, a fresh build of all workspaces, the built sync
+server, and `next start`. Web uses 127.0.0.1:3310 and sync uses 127.0.0.1:1310;
+existing listeners cause failure rather than being reused or stopped.
+
+When DATABASE_URL is unset, or E2E_USE_PGLITE=1, the harness creates a fresh
+in-memory PGlite database with a socket on an OS-assigned free port. Otherwise
+it migrates and uses DATABASE_URL: provide a dedicated test database, never a
+production database. Redis and GitHub OAuth are disabled in this test stack.
+Test-only auth and internal secrets are randomly generated for every run.
+NEXT_PUBLIC_SYNC_URL is set before building, since Next embeds it in the client.
+The resulting web build targets the test sync port; rebuild with deployment
+environment values before deploying it.
+For test-only edits after a successful E2E build, `E2E_SKIP_BUILD=1` reuses that
+production build to save CPU. Leave it unset whenever application code or build
+environment changes; ordinary `npm run e2e` always builds first.
+
+The four tests exercise demo login, UI creation/sharing, bidirectional typing,
+presence and remote caret labels, viewer UI and protocol enforcement (both STEP2
+and UPDATE frames), concurrent offline edits/reconnect, and snapshot diff/restore.
+Each test uses fresh browser contexts and unique identities, and removes its
+document afterward. External test databases retain those demo user rows.
+One headless Chromium worker runs locally without retries; CI retries twice.
+Failures retain traces and screenshots in apps/web/test-results, with an HTML
+report in apps/web/playwright-report. Teardown requests graceful shutdown and
+waits for sync persistence and the database to close, including on Windows.
+
+Security review: application queries use Drizzle; all document APIs check JWT
+sessions and membership, and mutation handlers check role and request Origin.
+Zod validates resource identifiers and mutation inputs. Streaming request-body
+limits enforce 16 KiB even without Content-Length and for multibyte JSON.
+Internal sync APIs use a timing-safe shared-secret check and trust the web
+service's role checks. Collaboration signatures are timing-safe and checked for
+expiry both on upgrade and throughout active connections. Demo login deliberately
+does not prove ownership of an email address and must not protect private data.
+The database constraint smoke tool uses raw pg SQL with generated UUID fixtures
+for intentional invalid-enum/constraint tests; production queries do not.

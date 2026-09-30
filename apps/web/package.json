@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "e2e": "cross-env PLAYWRIGHT_BROWSERS_PATH=0 playwright test"
+    "e2e": "cross-env PLAYWRIGHT_BROWSERS_PATH=0 playwright test",
+    "e2e:install": "cross-env PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium"
   },
   "dependencies": {
     "@tiptap/extension-collaboration": "^3.31.3",
@@ -34,6 +35,8 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "cross-env": "^7.0.3",
-    "tailwindcss": "^4.1.0"
+    "lib0": "^0.2.119",
+    "tailwindcss": "^4.1.0",
+    "y-protocols": "^1.0.7"
   }
 }
