@@ -5,7 +5,7 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
-    "build": "npm run build -w @weavepad/shared && npm run build -w @weavepad/sync-server && npm run build -w @weavepad/web",
+    "build": "npm --prefix packages/shared run build && npm --prefix apps/sync-server run build && npm --prefix apps/web run build",
     "e2e": "npm run e2e -w @weavepad/web",
     "db:local": "node tools/db-local.mjs",
     "db:migrate": "node packages/shared/scripts/migrate.mjs",

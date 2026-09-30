@@ -1,6 +1,32 @@
 {
-  "name": "@weavepad/sync-server", "version": "0.1.0", "private": true, "type": "module",
-  "scripts": { "build": "tsc -p tsconfig.build.json", "typecheck": "tsc --noEmit", "dev": "tsx watch src/index.ts", "start": "node dist/index.js", "test": "vitest run --project sync-server" },
-  "dependencies": { "@weavepad/shared": "0.1.0", "dotenv": "^17.2.3" },
-  "devDependencies": { "tsx": "^4.20.6" }
+  "name": "@weavepad/sync-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run --project sync-server"
+  },
+  "dependencies": {
+    "@weavepad/shared": "0.1.0",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.45.3",
+    "ioredis": "^6.0.0",
+    "lib0": "^0.2.119",
+    "pg": "^8.23.0",
+    "pino": "^10.3.1",
+    "ws": "^8.22.0",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.33",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.20.6",
+    "y-websocket": "^3.1.0"
+  }
 }
