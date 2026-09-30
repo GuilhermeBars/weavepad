@@ -16,13 +16,26 @@ async function stop() {
   await server.stop();
   await db.close();
 }
-for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { void stop(); });
+for (const signal of ['SIGINT', 'SIGTERM'])
+  process.once(signal, () => {
+    void stop();
+  });
 // Allows test harnesses to shut down gracefully on Windows as well as Unix.
-process.on('message', (message) => { if (message === 'shutdown') void stop().finally(() => process.disconnect?.()); });
-process.once('disconnect', () => { void stop(); });
+process.on('message', (message) => {
+  if (message === 'shutdown') void stop().finally(() => process.disconnect?.());
+});
+process.once('disconnect', () => {
+  void stop();
+});
 try {
   await server.start();
-  if (stopFile) stopPoll = setInterval(() => { if (existsSync(stopFile)) void stop(); }, 100);
+  if (stopFile)
+    stopPoll = setInterval(() => {
+      if (existsSync(stopFile)) void stop();
+    }, 100);
   console.log('PGlite listening on 127.0.0.1:5432 (persistent .pglite/)');
   process.send?.('ready');
-} catch (error) { await db.close(); throw error; }
+} catch (error) {
+  await db.close();
+  throw error;
+}

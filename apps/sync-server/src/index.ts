@@ -17,14 +17,38 @@ let stopping = false;
 async function stop() {
   if (stopping) return;
   stopping = true;
-  const deadline = setTimeout(() => { logger.fatal('Shutdown timed out; pending writes may remain'); process.exit(1); }, 20000);
-  try { await app.close(); logger.info('Sync server stopped'); }
-  catch (err) { logger.fatal({ err }, 'Shutdown failed'); process.exitCode = 1; }
-  finally { clearTimeout(deadline); process.disconnect?.(); if (process.exitCode) process.exit(process.exitCode); }
+  const deadline = setTimeout(() => {
+    logger.fatal('Shutdown timed out; pending writes may remain');
+    process.exit(1);
+  }, 20000);
+  try {
+    await app.close();
+    logger.info('Sync server stopped');
+  } catch (err) {
+    logger.fatal({ err }, 'Shutdown failed');
+    process.exitCode = 1;
+  } finally {
+    clearTimeout(deadline);
+    process.disconnect?.();
+    if (process.exitCode) process.exit(process.exitCode);
+  }
 }
-for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => { void stop(); });
-process.on('message', (message) => { if (message === 'shutdown') void stop(); });
-app.server.on('error', (err) => { logger.error({ err }, 'Server error'); process.exitCode = 1; void stop(); });
+for (const signal of ['SIGINT', 'SIGTERM'] as const)
+  process.once(signal, () => {
+    void stop();
+  });
+process.on('message', (message) => {
+  if (message === 'shutdown') void stop();
+});
+app.server.on('error', (err) => {
+  logger.error({ err }, 'Server error');
+  process.exitCode = 1;
+  void stop();
+});
 app.server.listen(config.PORT, config.SYNC_HOST, () => {
-  logger.info({ address: app.server.address(), redisEnabled: Boolean(fanout) }, 'Sync server listening'); process.send?.('ready');
+  logger.info(
+    { address: app.server.address(), redisEnabled: Boolean(fanout) },
+    'Sync server listening',
+  );
+  process.send?.('ready');
 });

@@ -80,7 +80,8 @@ Web and sync explicitly load root `.env`; existing environment values win.
 Run `npm run db:generate` for schema changes and commit the generated SQL and
 Drizzle metadata. Run `node tools/check-db.mjs` for the finite local migration,
 constraint and persistence smoke test (requires port 5432 to be free).
-Quality gates are `npm run typecheck`, `npm run lint`, `npm test`, and
+Run `npm run format` to apply the repository's Prettier style. CI quality gates are
+`npm run format:check`, `npm run typecheck`, `npm run lint`, `npm test`, and
 `npm run build`. Vitest projects cover shared logic and the HTTP server with one
 worker. `npm run e2e` is wired to Playwright with local browser storage, but the
 product suite and server orchestration are intentionally not implemented yet.
@@ -170,21 +171,21 @@ or runtime secret is required merely to build the app.
 
 The document API is implemented by the App Router catch-all route under `/api/docs`:
 
-| Method / path | Access / behavior |
-| --- | --- |
-| GET /api/docs | Signed in; returns `mine` (owner role) and `shared` |
-| POST /api/docs | Signed in; `{title}`, inserts document and owner membership atomically |
-| PATCH /api/docs/:id | Owner; `{title}` |
-| DELETE /api/docs/:id | Owner; cascading deletion |
-| GET /api/docs/:id/token | Any member; 5-minute signed token with current database role |
-| GET /api/docs/:id/members | Owner; membership list |
-| POST /api/docs/:id/members | Owner; `{email,role}`, user must already exist |
-| PATCH /api/docs/:id/members/:userId | Owner; `{role}` |
-| DELETE /api/docs/:id/members/:userId | Owner; removes membership |
-| GET /api/docs/:id/snapshots | Any member; metadata only |
-| POST /api/docs/:id/snapshots | Editor/owner; `{label}`, sync internal API |
-| GET /api/docs/:id/snapshots/:snapshotId/diff | Any member; saved text → current live server text, word additions/removals |
-| POST /api/docs/:id/snapshots/:snapshotId/restore | Editor/owner; sync internal forward restore |
+| Method / path                                    | Access / behavior                                                          |
+| ------------------------------------------------ | -------------------------------------------------------------------------- |
+| GET /api/docs                                    | Signed in; returns `mine` (owner role) and `shared`                        |
+| POST /api/docs                                   | Signed in; `{title}`, inserts document and owner membership atomically     |
+| PATCH /api/docs/:id                              | Owner; `{title}`                                                           |
+| DELETE /api/docs/:id                             | Owner; cascading deletion                                                  |
+| GET /api/docs/:id/token                          | Any member; 5-minute signed token with current database role               |
+| GET /api/docs/:id/members                        | Owner; membership list                                                     |
+| POST /api/docs/:id/members                       | Owner; `{email,role}`, user must already exist                             |
+| PATCH /api/docs/:id/members/:userId              | Owner; `{role}`                                                            |
+| DELETE /api/docs/:id/members/:userId             | Owner; removes membership                                                  |
+| GET /api/docs/:id/snapshots                      | Any member; metadata only                                                  |
+| POST /api/docs/:id/snapshots                     | Editor/owner; `{label}`, sync internal API                                 |
+| GET /api/docs/:id/snapshots/:snapshotId/diff     | Any member; saved text → current live server text, word additions/removals |
+| POST /api/docs/:id/snapshots/:snapshotId/restore | Editor/owner; sync internal forward restore                                |
 
 Owner mutations lock the document row, then re-read memberships in the transaction.
 Demotion/removal/upsert cannot remove the final owner. When the owner_id user loses

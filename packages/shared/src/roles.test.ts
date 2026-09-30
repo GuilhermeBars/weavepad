@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { assertPermission, assertRole, canRead, hasRole, permissions, PermissionError, ROLE_RANK, type Role } from './roles.js';
+import {
+  assertPermission,
+  assertRole,
+  canRead,
+  hasRole,
+  permissions,
+  PermissionError,
+  ROLE_RANK,
+  type Role,
+} from './roles.js';
 describe('roles', () => {
   it.each([
     ['viewer', [true, false, false, false, false, false]],

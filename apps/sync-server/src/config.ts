@@ -17,5 +17,9 @@ const schema = z.object({
 });
 export type Config = z.infer<typeof schema>;
 export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  return schema.parse({ ...env, PORT: env.PORT ?? env.SYNC_PORT, REDIS_URL: env.REDIS_URL || undefined });
+  return schema.parse({
+    ...env,
+    PORT: env.PORT ?? env.SYNC_PORT,
+    REDIS_URL: env.REDIS_URL || undefined,
+  });
 }

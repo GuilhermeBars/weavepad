@@ -3,11 +3,19 @@ import * as Y from 'yjs';
 
 /** A deleted document is terminal, unlike a transient database outage. */
 export class DocumentDeletedError extends Error {
-  constructor() { super('Document not found'); this.name = 'DocumentDeletedError'; }
+  constructor() {
+    super('Document not found');
+    this.name = 'DocumentDeletedError';
+  }
 }
 
 export interface Snapshot {
-  id: string; documentId: string; label: string; createdBy: string; createdAt: Date; state: Uint8Array;
+  id: string;
+  documentId: string;
+  label: string;
+  createdBy: string;
+  createdAt: Date;
+  state: Uint8Array;
 }
 export type SnapshotMetadata = Omit<Snapshot, 'state'>;
 export function metadata({ state: _state, ...rest }: Snapshot): SnapshotMetadata {
@@ -29,7 +37,9 @@ export function mergeState(updates: Uint8Array[]): Uint8Array {
   try {
     for (const update of updates) Y.applyUpdate(doc, update);
     return Y.encodeStateAsUpdate(doc);
-  } finally { doc.destroy(); }
+  } finally {
+    doc.destroy();
+  }
 }
 /** Test/development repository, intentionally without foreign-key fixtures. */
 export class MemoryRepository implements Repository {
@@ -50,7 +60,14 @@ export class MemoryRepository implements Repository {
     this.updates.delete(id);
   }
   async createSnapshot(documentId: string, label: string, createdBy: string, state: Uint8Array) {
-    const snapshot = { id: randomUUID(), documentId, label, createdBy, state: state.slice(), createdAt: new Date() };
+    const snapshot = {
+      id: randomUUID(),
+      documentId,
+      label,
+      createdBy,
+      state: state.slice(),
+      createdAt: new Date(),
+    };
     this.snapshots.set(snapshot.id, snapshot);
     return snapshot;
   }

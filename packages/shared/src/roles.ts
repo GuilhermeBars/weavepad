@@ -1,5 +1,5 @@
 export const ROLES = ['viewer', 'editor', 'owner'] as const;
-export type Role = typeof ROLES[number];
+export type Role = (typeof ROLES)[number];
 export const ROLE_RANK: Readonly<Record<Role, number>> = { viewer: 0, editor: 1, owner: 2 };
 export function isRole(value: unknown): value is Role {
   return value === 'viewer' || value === 'editor' || value === 'owner';
@@ -13,7 +13,14 @@ export const canSnapshot = canEdit;
 export const canRestore = canEdit;
 export const canShare = (role: unknown) => hasRole(role, 'owner');
 export const canManage = canShare;
-export const permissions = { read: canRead, edit: canEdit, snapshot: canSnapshot, restore: canRestore, share: canShare, manage: canManage };
+export const permissions = {
+  read: canRead,
+  edit: canEdit,
+  snapshot: canSnapshot,
+  restore: canRestore,
+  share: canShare,
+  manage: canManage,
+};
 export type Permission = keyof typeof permissions;
 export class PermissionError extends Error {
   readonly code = 'FORBIDDEN';

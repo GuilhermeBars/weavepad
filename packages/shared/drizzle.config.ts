@@ -6,6 +6,11 @@ config({ path: fileURLToPath(new URL('../../.env', import.meta.url)), quiet: tru
 export default defineConfig({
   dialect: 'postgresql',
   schema: fileURLToPath(new URL('./src/db/schema.ts', import.meta.url)).replaceAll('\\', '/'),
-  out: relative(process.cwd(), fileURLToPath(new URL('./drizzle', import.meta.url))).replaceAll('\\', '/'),
-  dbCredentials: { url: process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:5432/postgres' },
+  out: relative(process.cwd(), fileURLToPath(new URL('./drizzle', import.meta.url))).replaceAll(
+    '\\',
+    '/',
+  ),
+  dbCredentials: {
+    url: process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:5432/postgres',
+  },
 });
