@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 3310",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --port 3310",
     "typecheck": "tsc --noEmit",
     "e2e": "cross-env PLAYWRIGHT_BROWSERS_PATH=0 playwright test",
+    "docs:screenshots": "cross-env PLAYWRIGHT_BROWSERS_PATH=0 E2E_USE_PGLITE=1 playwright test --config playwright.docs.config.ts",
     "e2e:install": "cross-env PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium"
   },
   "dependencies": {

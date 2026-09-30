@@ -16,6 +16,7 @@
     "test": "vitest run",
     "build": "npm --prefix packages/shared run build && npm --prefix apps/sync-server run build && npm --prefix apps/web run build",
     "e2e": "npm run e2e -w @weavepad/web",
+    "docs:screenshots": "npm run docs:screenshots -w @weavepad/web",
     "db:local": "node tools/db-local.mjs",
     "db:migrate": "node packages/shared/scripts/migrate.mjs",
     "db:generate": "drizzle-kit generate --config packages/shared/drizzle.config.ts",

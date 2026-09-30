@@ -7,6 +7,7 @@ process.env.E2E_SHUTDOWN_FILE = join(tmpdir(), `weavepad-e2e-${randomUUID()}`);
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: '**/docs/**',
   globalTeardown: './e2e/teardown.ts',
   fullyParallel: false,
   workers: 1,
