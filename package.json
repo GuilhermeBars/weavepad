@@ -30,6 +30,7 @@
     "@electric-sql/pglite": "0.5.8",
     "@electric-sql/pglite-socket": "0.2.11",
     "@eslint/js": "^9.39.1",
+    "@next/eslint-plugin-next": "^15.5.26",
     "@types/node": "^20.19.0",
     "concurrently": "^9.2.1",
     "drizzle-kit": "^0.31.4",

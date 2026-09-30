@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { auth } from '../../auth';
 import { LoginForm } from '../../components/login-form';
 export default async function LoginPage() {
@@ -6,9 +7,9 @@ export default async function LoginPage() {
   return (
     <main className="login-shell">
       <section className="login-story">
-        <a className="brand" href="/">
+        <Link className="brand" href="/">
           ▧ <span>weavepad</span>
-        </a>
+        </Link>
         <div>
           <p className="eyebrow">BETTER IDEAS, TOGETHER</p>
           <h1>

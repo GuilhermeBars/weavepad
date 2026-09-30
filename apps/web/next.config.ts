@@ -5,7 +5,7 @@ config({ path: fileURLToPath(new URL('../../.env', import.meta.url)), quiet: tru
 const nextConfig: NextConfig = {
   experimental: { cpus: 1 },
   transpilePackages: ['@weavepad/shared'],
-  output: 'standalone',
+  ...(process.env.NEXT_OUTPUT === 'standalone' ? { output: 'standalone' as const } : {}),
   outputFileTracingRoot: fileURLToPath(new URL('../..', import.meta.url)),
 };
 export default nextConfig;

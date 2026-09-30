@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { auth, signOut } from '../auth';
 import { Dashboard } from '../components/dashboard';
 export default async function Home() {
@@ -7,9 +8,9 @@ export default async function Home() {
   return (
     <>
       <header className="app-header">
-        <a href="/" className="brand">
+        <Link href="/" className="brand">
           ▧ <span>weavepad</span>
-        </a>
+        </Link>
         <div className="row">
           <span className="muted">{session.user.name}</span>
           <form
