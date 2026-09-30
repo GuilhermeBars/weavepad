@@ -1,0 +1,14 @@
+.codex-logs/
+node_modules/
+.next/
+dist/
+.pglite/
+.npm-cache/
+.env
+.env.local
+.env.*.local
+playwright-report/
+test-results/
+blob-report/
+.local-browsers/
+*.tsbuildinfo
